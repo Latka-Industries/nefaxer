@@ -4,11 +4,33 @@ use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 
 use crate::Opts;
-use crate::disk_detect::{channel_cap_for_drive, determine_threads_for_drive};
+use crate::disk_detect::{DriveType, channel_cap_for_drive, determine_threads_for_drive};
 use crate::engine::parallel::parallel_walk_handler;
 use crate::engine::{path_count_from_db, tools::canonicalize_paths};
 use crate::pipeline;
 use crate::utils::config::{StreamingChannelCap, WorkerThreadLimits};
+use crate::utils::fd_limit::determine_threads_given_fd_limit;
+
+/// When [`Opts::num_threads`], [`Opts::drive_type`], and [`Opts::use_parallel_walk`] are all `Some`,
+/// returns the `(thread_count, drive_type, use_parallel_walk)` the indexing pipeline would use
+/// **without** calling [`determine_threads_for_drive`] or network probe. `thread_count` is
+/// FD-capped the same way as after auto-tuning.
+///
+/// Returns `None` if any of the three fields is missing (pipeline will probe instead).
+///
+/// Embedders can call this on an [`Opts`] built from [`crate::NefaxOpts`] to confirm tuning is
+/// complete before running the pipeline, or to display effective settings in an app.
+#[must_use]
+pub fn explicit_lib_tuning(opts: &Opts) -> Option<(usize, DriveType, bool)> {
+    let n = opts.num_threads?;
+    let drive_type = opts.drive_type?;
+    let use_parallel_walk = opts.use_parallel_walk?;
+    Some((
+        determine_threads_given_fd_limit(n),
+        drive_type,
+        use_parallel_walk,
+    ))
+}
 
 /// Start the walk + metadata pipeline. Returns receiver and handles; caller receives from
 /// `entry_rx` and must join `walk_handle` and `worker_handles` when done.
@@ -81,7 +103,10 @@ pub fn shutdown_pipeline_handles(
     Ok(())
 }
 
-/// Canonicalize root and paths, detect drive type, compute thread count.
+/// Canonicalize root and paths, detect drive type (unless [`Opts`] carries full lib tuning), compute thread count.
+///
+/// When [`Opts::num_threads`], [`Opts::drive_type`], and [`Opts::use_parallel_walk`] are all `Some`,
+/// uses those values (threads after FD cap) and **skips** [`determine_threads_for_drive`] / network probe.
 ///
 /// # Errors
 ///
@@ -100,12 +125,21 @@ pub fn setup_pipeline_root_and_tuning(
 )> {
     let (root, db_canonical, temp_canonical) = canonicalize_paths(root, db_path, temp_path)?;
 
-    let (num_threads, drive_type, parallel_walk) = determine_threads_for_drive(
-        &root,
-        Some(conn),
-        WorkerThreadLimits::current().all_threads,
-        opts.num_threads,
-    );
+    let (num_threads, drive_type, parallel_walk) = if let Some((n, dt, pw)) =
+        explicit_lib_tuning(opts)
+    {
+        debug!(
+            "Pipeline tuning from opts (skip disk/network probe): threads={n}, drive={dt:?}, parallel_walk={pw}"
+        );
+        (n, dt, pw)
+    } else {
+        determine_threads_for_drive(
+            &root,
+            Some(conn),
+            WorkerThreadLimits::current().all_threads,
+            opts.num_threads,
+        )
+    };
 
     // Channel cap: if .nefaxer exists, get path count from DB (fast COUNT(*)); else drive-type default.
     let stored_count = path_count_from_db(conn).filter(|&n| n > 0);

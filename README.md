@@ -147,6 +147,10 @@ Use `NefaxOpts::default()` and override as needed:
 - `strict` — fail on first permission/access error
 - `paranoid` — re-hash when hash matches but mtime/size differ
 
+**Skipping disk/network probe:** If all three of `num_threads`, `drive_type`, and `use_parallel_walk` are set (for example from `tuning_for_path`), the pipeline uses them directly.
+
+**`nefaxer::check`:** Advanced helpers such as `diff_from_stream` and `diff_from_stream_with_callback` take `crossbeam_channel::Receiver` by reference (`&Receiver<Entry>`), not by value.
+
 ### Examples
 
 ```rust

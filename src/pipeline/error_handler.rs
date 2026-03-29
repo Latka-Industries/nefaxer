@@ -39,7 +39,7 @@ pub fn check_for_initial_error_or_skipped_paths(
             // Log-only percentage; usize→f64 is acceptable for display.
             #[allow(clippy::cast_precision_loss)]
             let pct = (count as f64 / total as f64) * 100.0;
-            warn!("  - {}: {} paths ({pct:.2}%)", msg, count);
+            warn!("  - {msg}: {count} paths ({pct:.2}%)");
         }
     }
     Ok(())

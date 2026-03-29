@@ -54,8 +54,8 @@ where
 
 /// Returns `(num_threads, drive_type, use_parallel_walk)` for use in [`NefaxOpts`] when you have no DB.
 ///
-/// Calls [`determine_threads_for_drive`](determine_threads_for_drive) with `conn: None` (network probe runs but is not cached).
-/// Set all three on `NefaxOpts` so [`nefax_dir`] skips disk detection:
+/// Calls [`determine_threads_for_drive`](determine_threads_for_drive) with `conn: None` (network probe runs when the path is a network mount, but is not cached).
+/// Set all three fields on [`NefaxOpts`] so the indexing pipeline **skips** disk/network probing and uses your values:
 ///
 /// ```ignore
 /// let (n, dt, pw) = nefaxer::tuning_for_path(path, None);
