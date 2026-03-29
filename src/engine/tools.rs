@@ -14,7 +14,7 @@ use crate::utils::config::PackagePaths;
 /// Convert absolute path to relative path from base
 #[must_use]
 pub fn path_relative_to(path: &Path, base: &Path) -> Option<PathBuf> {
-    path.strip_prefix(base).ok().map(|p| p.to_path_buf())
+    path.strip_prefix(base).ok().map(Path::to_path_buf)
 }
 
 /// Normalize path for DB storage: forward slashes only. Makes DB portable across Windows/Unix.
@@ -306,7 +306,7 @@ pub fn print_diff(diff: &Diff, dry_run: bool, list_paths: bool, output_dir: &Pat
 pub fn create_db_path(root: &Path, db_path: Option<&Path>) -> PathBuf {
     db_path.map_or_else(
         || root.join(PackagePaths::get().output_filename()),
-        |p| p.to_path_buf(),
+        Path::to_path_buf,
     )
 }
 

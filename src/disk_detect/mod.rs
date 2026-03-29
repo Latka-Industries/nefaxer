@@ -121,6 +121,10 @@ pub fn channel_cap_for_drive(drive_type: DriveType) -> usize {
 /// - **Library / no DB:** pass `conn: None`; network probe still runs but is not cached. Use
 ///   [`crate::tuning_for_path`] for a convenience wrapper that fills [`crate::NefaxOpts`].
 ///
+/// **Skip path:** when the pipeline receives [`crate::Opts`] with all of `num_threads`,
+/// `drive_type`, and `use_parallel_walk` set (e.g. from [`crate::NefaxOpts`] after tuning), it does
+/// **not** call this function and uses those values instead (no disk or network probe).
+///
 /// Return value: worker count (FD limit applied), drive type (SSD/HDD/Network/Unknown), and
 /// `use_parallel_walk` (`true` for jwalk, `false` for walkdir). `thread_override` forces the
 /// thread count (still capped by FD limit).

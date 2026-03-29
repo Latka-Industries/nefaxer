@@ -66,7 +66,7 @@ fn collect_pipeline_results(
     worker_handles: Vec<std::thread::JoinHandle<()>>,
     is_network_drive: bool,
     written: usize,
-    nefaxing_bar: &Option<Arc<std::sync::Mutex<Bar>>>,
+    nefaxing_bar: Option<&Arc<std::sync::Mutex<Bar>>>,
 ) -> Result<usize> {
     let path_count = walk_handle
         .join()
@@ -221,7 +221,7 @@ pub(crate) fn nefax_dir_with_opts(
         worker_handles,
         is_network_drive,
         written,
-        &nefaxing_bar,
+        nefaxing_bar.as_ref(),
     )?;
     check_for_initial_error_or_skipped_paths(opts, &first_error, &skipped_paths)?;
 

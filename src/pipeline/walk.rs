@@ -17,7 +17,7 @@ pub enum WalkOutcome {
 /// Convert a jwalk result into [`WalkOutcome`].
 pub fn to_outcome_jwalk(r: Result<jwalk::DirEntry<((), ())>, jwalk::Error>) -> WalkOutcome {
     match r {
-        Ok(entry) => WalkOutcome::Ok(entry.path().to_path_buf()),
+        Ok(entry) => WalkOutcome::Ok(entry.path().clone()),
         Err(err) => WalkOutcome::Err {
             msg: format!("{err}"),
             path: err.path().map(PathBuf::from),
