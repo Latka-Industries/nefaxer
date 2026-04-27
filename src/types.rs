@@ -88,6 +88,7 @@ pub fn validate_nefax(nefax: &Nefax) -> Result<()> {
 
 /// Lib-only options for [`nefax_dir`](crate::nefax_dir). Only the fields that apply when using the crate (no DB).
 #[derive(Clone, Debug, Default)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct NefaxOpts {
     /// Override worker thread count. When None, derived from drive type and FD limit.
     pub num_threads: Option<usize>,
@@ -132,6 +133,7 @@ impl From<&NefaxOpts> for Opts {
 
 /// Full options (CLI and check). Use [`NefaxOpts`] for lib.
 #[derive(Clone, Default, Debug)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct Opts {
     /// Index database path. When None, uses `root.join(<package index filename>)` (e.g. `.nefaxer`).
     pub db_path: Option<PathBuf>,

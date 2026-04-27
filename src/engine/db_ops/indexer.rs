@@ -56,7 +56,7 @@ fn execute_insert_entry(stmt: &mut Statement<'_>, e: &Entry) -> Result<()> {
     stmt.execute((
         path_to_db_string(&e.path).as_str(),
         e.mtime_ns,
-        e.size as i64,
+        e.size.cast_signed(),
         e.hash.as_ref().map(<[u8; 32]>::as_slice),
     ))
     .context("insert path")?;

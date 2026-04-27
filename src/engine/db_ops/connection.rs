@@ -99,7 +99,10 @@ pub fn load_index(conn: &Connection) -> Result<HashMap<PathBuf, StoredMeta>> {
             let mtime_ns: i64 = row.get(1)?;
             let size: i64 = row.get(2)?;
             let hash: Option<Vec<u8>> = row.get(3)?;
-            Ok((PathBuf::from(path), (mtime_ns, size.max(0) as u64, hash)))
+            Ok((
+                PathBuf::from(path),
+                (mtime_ns, size.max(0).cast_unsigned(), hash),
+            ))
         })
         .context("query paths table")?;
     let mut map = HashMap::new();
