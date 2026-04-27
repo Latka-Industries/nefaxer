@@ -19,7 +19,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          toolchain: 1.95
 
       - name: Install OpenSSL (Windows)
         if: runner.os == 'Windows'
@@ -81,7 +81,7 @@ jobs:
       - name: Install Rust (MSRV)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.93
+          toolchain: 1.95
 
       - name: Cache Cargo dependencies
         uses: actions/cache@v4
@@ -109,7 +109,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          toolchain: 1.95
 
       - name: Install OpenSSL (Windows)
         if: runner.os == 'Windows'
