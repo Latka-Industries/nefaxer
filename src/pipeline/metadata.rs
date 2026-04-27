@@ -41,10 +41,9 @@ pub fn spawn_metadata_workers(
 /// Process a single path into an Entry (metadata + optional hash).
 fn path_to_entry(abs_path: &Path, root: &Path, with_hash: bool) -> Result<Entry> {
     let meta = std::fs::metadata(abs_path)?;
-    let mtime_ns = meta
-        .modified()
-        .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as i64)
-        .unwrap_or(0);
+    let mtime_ns = meta.modified().map_or(0, |t| {
+        t.duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as i64
+    });
     let size = meta.len();
     let is_file = meta.is_file();
     let rel = path_relative_to(abs_path, root).unwrap_or_else(|| abs_path.to_path_buf());

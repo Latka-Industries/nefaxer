@@ -1,7 +1,7 @@
 //! Index diff: `apply_index_diff_streaming` (stream entries to DB with one writer).
 
 use anyhow::{Context, Result};
-use crossbeam_channel::Receiver;
+use crossbeam_channel::{Receiver, RecvTimeoutError};
 use rusqlite::{Connection, Statement};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -57,7 +57,7 @@ fn execute_insert_entry(stmt: &mut Statement<'_>, e: &Entry) -> Result<()> {
         path_to_db_string(&e.path).as_str(),
         e.mtime_ns,
         e.size as i64,
-        e.hash.as_ref().map(|h| h.as_slice()),
+        e.hash.as_ref().map(<[u8; 32]>::as_slice),
     ))
     .context("insert path")?;
     Ok(())
@@ -99,6 +99,133 @@ pub struct ApplyIndexDiffStreamingParams<'a> {
     pub result_map: Option<&'a mut HashMap<PathBuf, StoredMeta>>,
 }
 
+enum RecvIndexOutcome {
+    Entry(Entry),
+    Break,
+    Again,
+}
+
+fn recv_index_entry(
+    entry_rx: &Receiver<Entry>,
+    recv_timeout: Option<Duration>,
+    cancel_check: Option<&Arc<AtomicBool>>,
+) -> RecvIndexOutcome {
+    match recv_timeout {
+        Some(ref timeout) => match entry_rx.recv_timeout(*timeout) {
+            Ok(entry) => RecvIndexOutcome::Entry(entry),
+            Err(RecvTimeoutError::Timeout) => {
+                if cancel_check.is_some_and(|c| c.load(Ordering::Relaxed)) {
+                    log::info!("Indexing cancelled (Ctrl+C); flushing partial index...");
+                    RecvIndexOutcome::Break
+                } else {
+                    RecvIndexOutcome::Again
+                }
+            }
+            Err(RecvTimeoutError::Disconnected) => RecvIndexOutcome::Break,
+        },
+        None => match entry_rx.recv() {
+            Ok(entry) => RecvIndexOutcome::Entry(entry),
+            Err(_) => RecvIndexOutcome::Break,
+        },
+    }
+}
+
+/// For large files when `with_hash` is on, copy hash from `existing` or hash the file on disk.
+fn maybe_reuse_or_compute_entry_hash(
+    entry: &mut Entry,
+    with_hash: bool,
+    mtime_window_ns: i64,
+    existing: &HashMap<PathBuf, StoredMeta>,
+    root: Option<&Path>,
+) {
+    if !with_hash || entry.size < SMALL_FILE_THRESHOLD {
+        return;
+    }
+    let Some(r) = root else {
+        return;
+    };
+    let existing_meta = existing.get(&entry.path);
+    let reuse_hash = existing_meta.is_some_and(|(old_mtime, old_size, old_hash)| {
+        !mtime_changed(entry.mtime_ns, *old_mtime, mtime_window_ns)
+            && entry.size == *old_size
+            && old_hash.as_ref().is_some_and(|v| v.len() == 32)
+    });
+    if reuse_hash {
+        if let Some((_, _, Some(v))) = existing_meta {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(v);
+            entry.hash = Some(arr);
+        }
+    } else {
+        let abs = r.join(&entry.path);
+        if let Ok(Some(h)) = hash_file(&abs, entry.size) {
+            entry.hash = Some(h);
+        }
+    }
+}
+
+fn process_index_entry_write(
+    entry: Entry,
+    current_paths: &mut HashSet<PathBuf>,
+    params: &mut ApplyIndexDiffStreamingParams<'_>,
+    batch: &mut Vec<Entry>,
+) {
+    current_paths.insert(entry.path.clone());
+    if let Some(ref mut map) = params.result_map {
+        let hash = entry.hash.map(|a| a.to_vec()).or_else(|| {
+            params
+                .existing
+                .get(&entry.path)
+                .and_then(|(_, _, h)| h.clone())
+        });
+        map.insert(entry.path.clone(), (entry.mtime_ns, entry.size, hash));
+    }
+    if entry_needs_update(&entry, params.existing, params.mtime_window_ns) {
+        if let Some(diff) = params.diff.as_deref_mut() {
+            if params.existing.contains_key(&entry.path) {
+                diff.modified.push(entry.path.clone());
+            } else {
+                diff.added.push(entry.path.clone());
+            }
+        }
+        batch.push(entry);
+    }
+}
+
+fn finalize_index_stream(
+    conn: &mut Connection,
+    received: usize,
+    batch: &mut [Entry],
+    current_paths: &HashSet<PathBuf>,
+    written: &mut usize,
+    params: &mut ApplyIndexDiffStreamingParams<'_>,
+) -> Result<()> {
+    if let Some(ref cb) = params.on_received_progress {
+        let remainder = received % DB_INSERT_BATCH_SIZE;
+        if remainder > 0 {
+            cb(remainder);
+        }
+    }
+
+    if !batch.is_empty() {
+        *written += flush_batch(conn, batch, params.on_batch_progress.as_deref())?;
+    }
+
+    delete_removed_paths(conn, params.existing, current_paths)?;
+
+    if let Some(diff) = params.diff.as_deref_mut() {
+        for path in params.existing.keys() {
+            if !current_paths.contains(path) {
+                diff.removed.push(path.clone());
+            }
+        }
+    }
+
+    conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))
+        .context("WAL checkpoint")?;
+    Ok(())
+}
+
 /// Write entries to DB as they are received (streaming). Tracks current paths for deletes at end.
 ///
 /// # Errors
@@ -118,28 +245,14 @@ pub fn apply_index_diff_streaming(
         .cancel_check
         .as_ref()
         .map(|_| Duration::from_millis(200));
+    // Clone so the loop can mutably borrow `params` for writes without overlapping `&params`.
+    let cancel = params.cancel_check.clone();
 
     loop {
-        let mut entry = match recv_timeout {
-            Some(ref timeout) => match entry_rx.recv_timeout(*timeout) {
-                Ok(entry) => entry,
-                Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                    if params
-                        .cancel_check
-                        .as_ref()
-                        .is_some_and(|c| c.load(Ordering::Relaxed))
-                    {
-                        log::info!("Indexing cancelled (Ctrl+C); flushing partial index...");
-                        break;
-                    }
-                    continue;
-                }
-                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
-            },
-            None => match entry_rx.recv() {
-                Ok(entry) => entry,
-                Err(_) => break,
-            },
+        let mut entry = match recv_index_entry(entry_rx, recv_timeout, cancel.as_ref()) {
+            RecvIndexOutcome::Entry(e) => e,
+            RecvIndexOutcome::Break => break,
+            RecvIndexOutcome::Again => continue,
         };
         received += 1;
         if let Some(ref cb) = params.on_received_progress
@@ -147,78 +260,27 @@ pub fn apply_index_diff_streaming(
         {
             cb(DB_INSERT_BATCH_SIZE);
         }
-        if params.with_hash
-            && entry.size >= SMALL_FILE_THRESHOLD
-            && let Some(r) = params.root
-        {
-            let existing_meta = params.existing.get(&entry.path);
-            let reuse_hash = existing_meta.is_some_and(|(old_mtime, old_size, old_hash)| {
-                !mtime_changed(entry.mtime_ns, *old_mtime, params.mtime_window_ns)
-                    && entry.size == *old_size
-                    && old_hash.as_ref().is_some_and(|v| v.len() == 32)
-            });
-            if reuse_hash {
-                if let Some((_, _, Some(v))) = existing_meta {
-                    let mut arr = [0u8; 32];
-                    arr.copy_from_slice(v);
-                    entry.hash = Some(arr);
-                }
-            } else {
-                let abs = r.join(&entry.path);
-                if let Ok(Some(h)) = hash_file(&abs, entry.size) {
-                    entry.hash = Some(h);
-                }
-            }
-        }
-        current_paths.insert(entry.path.clone());
-        if let Some(ref mut map) = params.result_map {
-            let hash = entry.hash.map(|a| a.to_vec()).or_else(|| {
-                params
-                    .existing
-                    .get(&entry.path)
-                    .and_then(|(_, _, h)| h.clone())
-            });
-            map.insert(entry.path.clone(), (entry.mtime_ns, entry.size, hash));
-        }
-        if entry_needs_update(&entry, params.existing, params.mtime_window_ns) {
-            if let Some(diff) = params.diff.as_deref_mut() {
-                if params.existing.contains_key(&entry.path) {
-                    diff.modified.push(entry.path.clone());
-                } else {
-                    diff.added.push(entry.path.clone());
-                }
-            }
-            batch.push(entry);
-        }
+        maybe_reuse_or_compute_entry_hash(
+            &mut entry,
+            params.with_hash,
+            params.mtime_window_ns,
+            params.existing,
+            params.root,
+        );
+        process_index_entry_write(entry, &mut current_paths, params, &mut batch);
         if batch.len() >= DB_INSERT_BATCH_SIZE {
             written += flush_batch(conn, &batch, params.on_batch_progress.as_deref())?;
             batch.clear();
         }
     }
 
-    if let Some(ref cb) = params.on_received_progress {
-        let remainder = received % DB_INSERT_BATCH_SIZE;
-        if remainder > 0 {
-            cb(remainder);
-        }
-    }
-
-    if !batch.is_empty() {
-        written += flush_batch(conn, &batch, params.on_batch_progress.as_deref())?;
-    }
-
-    delete_removed_paths(conn, params.existing, &current_paths)?;
-
-    if let Some(diff) = params.diff.as_deref_mut() {
-        for path in params.existing.keys() {
-            if !current_paths.contains(path) {
-                diff.removed.push(path.clone());
-            }
-        }
-    }
-
-    conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))
-        .context("WAL checkpoint")?;
-
+    finalize_index_stream(
+        conn,
+        received,
+        &mut batch,
+        &current_paths,
+        &mut written,
+        params,
+    )?;
     Ok(written)
 }
