@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/nefaxer.svg)](https://crates.io/crates/nefaxer)
 [![docs.rs](https://img.shields.io/docsrs/nefaxer)](https://docs.rs/nefaxer)
 ![Build](https://github.com/thicclatka/nefaxer/workflows/Build/badge.svg)
-![Rust](https://img.shields.io/badge/rust-1.93-orange.svg)
+![Rust](https://img.shields.io/badge/rust-1.95-orange.svg)
 
 > The Demon could sit in a box among air molecules that were moving at all different random speeds, and sort out the fast molecules from the slow ones.  
 > — Koteks on the Nefastis Machine, _[The Crying of Lot 49](https://bookshop.org/p/books/the-crying-of-lot-49-thomas-pynchon/e6265a50e173d7ec?ean=9780060913076&next=t)_
