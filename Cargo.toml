@@ -1,9 +1,9 @@
 [package]
 name = "nefaxer"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2024"
 rust-version = "1.95"
-authors = ["AHurowitz <thicclatka@users.noreply.github.com>"]
+authors = ["AHurowitz <latkaindustries@gmail.com>"]
 description = "High-performance directory indexer with content-aware diffing. Walks trees in parallel, stores metadata in SQLite, compares against a previous snapshot."
 license = "MIT or Apache-2.0"
 repository = "https://github.com/thicclatka/nefaxer"
