@@ -31,7 +31,7 @@
     ".gitignore": ".pre-commit-config.yaml, cspell.json, release-changelog-builder-config.json",
     "Cargo.toml": "Cargo.lock",
     "cargo.toml": "Cargo.lock",
-    "README.md": "LICENSE-MIT, LICENSE-APACHE"
+    "README.md": "LICENSE-MIT, LICENSE-APACHE, CHANGELOG.md"
   },
 
   // Git settings
