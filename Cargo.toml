@@ -60,7 +60,7 @@ name = "benchmarks"
 harness = false
 
 [profile.bench]
-debug = true
+debug = false
 
 [profile.release]
 opt-level = "s"
