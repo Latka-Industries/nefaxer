@@ -10,7 +10,9 @@ pub fn populate_index_tree(root: &Path, file_count: usize) {
     fs::create_dir_all(root).unwrap();
     let sizes = [512_u64, 8 * 1024, 64 * 1024];
     for i in 0..file_count {
-        let dir = root.join(format!("branch{}", i % 48)).join(format!("leaf{}", i % 12));
+        let dir = root
+            .join(format!("branch{}", i % 48))
+            .join(format!("leaf{}", i % 12));
         fs::create_dir_all(&dir).unwrap();
         let size = sizes[i % sizes.len()];
         write_sized_file(&dir.join(format!("file{i}.bin")), size);

@@ -4,8 +4,8 @@ mod common;
 
 use common::{opts_for_root, populate_index_tree, remove_index_file, temp_fixture_root};
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
-use nefaxer::nefax_dir;
 use nefaxer::Entry;
+use nefaxer::nefax_dir;
 use std::hint::black_box;
 use std::path::Path;
 use std::process::Command;
