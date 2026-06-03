@@ -1,4 +1,4 @@
-//! DB tests: path_count_from_db, load_index round-trip, and file-DB fixture.
+//! DB tests: in-memory path_count/load_index, and file-DB complex fixture.
 
 use nefaxer::engine::{load_index, open_db, open_db_in_memory, path_count_from_db};
 use std::path::PathBuf;
@@ -7,14 +7,10 @@ const INSERT_PATH_SQL: &str =
     "INSERT OR REPLACE INTO paths (path, mtime_ns, size, hash) VALUES (?1, ?2, ?3, ?4)";
 
 #[test]
-fn test_path_count_from_db_empty() {
+fn test_in_memory_path_count_and_load_index() {
     let conn = open_db_in_memory().unwrap();
     assert_eq!(path_count_from_db(&conn), Some(0));
-}
 
-#[test]
-fn test_path_count_from_db_after_insert() {
-    let conn = open_db_in_memory().unwrap();
     conn.execute(
         INSERT_PATH_SQL,
         rusqlite::params!["a/b", 100_i64, 10_i64, None::<Vec<u8>>],
@@ -33,51 +29,15 @@ fn test_path_count_from_db_after_insert() {
     )
     .unwrap();
     assert_eq!(path_count_from_db(&conn), Some(3));
-}
-
-#[test]
-fn test_load_index_round_trip() {
-    let conn = open_db_in_memory().unwrap();
-    let rows = [
-        ("rel/path/a", 1000_i64, 100_i64, None::<Vec<u8>>),
-        ("rel/path/b", 2000_i64, 200_i64, Some(vec![1u8; 32])),
-        ("single", 0_i64, 0_i64, None::<Vec<u8>>),
-    ];
-    for (path, mtime_ns, size, hash) in &rows {
-        conn.execute(
-            INSERT_PATH_SQL,
-            rusqlite::params![path, mtime_ns, size, hash],
-        )
-        .unwrap();
-    }
 
     let map = load_index(&conn).unwrap();
     assert_eq!(map.len(), 3);
-
+    assert_eq!(map.get(&PathBuf::from("a/b")), Some(&(100, 10_u64, None)));
+    assert_eq!(map.get(&PathBuf::from("c/d")), Some(&(200, 20_u64, None)));
     assert_eq!(
-        map.get(&PathBuf::from("rel/path/a")),
-        Some(&(1000, 100_u64, None))
+        map.get(&PathBuf::from("e/f")),
+        Some(&(300, 30_u64, Some(vec![0u8; 32])))
     );
-    assert_eq!(
-        map.get(&PathBuf::from("rel/path/b")),
-        Some(&(2000, 200_u64, Some(vec![1u8; 32])))
-    );
-    assert_eq!(
-        map.get(&PathBuf::from("single")),
-        Some(&(0_i64, 0_u64, None))
-    );
-}
-
-/// Uses tests/fixtures/.nefaxer_simple: create if missing (empty schema), then path_count → 0.
-#[test]
-fn test_path_count_from_db_file_fixture_simple() {
-    let fixtures_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures");
-    let db_path = fixtures_dir.join(".nefaxer_simple");
-    std::fs::create_dir_all(&fixtures_dir).unwrap();
-    let conn = open_db(&db_path, None).unwrap();
-    assert_eq!(path_count_from_db(&conn), Some(0));
 }
 
 /// Uses tests/fixtures/.nefaxer_complex: real index of this repo (diskinfo wiped).

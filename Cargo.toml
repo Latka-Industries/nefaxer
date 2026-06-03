@@ -1,13 +1,13 @@
 [package]
 name = "nefaxer"
-version = "0.1.10"
+version = "0.1.11"
 edition = "2024"
 rust-version = "1.95"
 authors = ["AHurowitz <latkaindustries@gmail.com>"]
 description = "High-performance directory indexer with content-aware diffing. Walks trees in parallel, stores metadata in SQLite, compares against a previous snapshot."
 license = "MIT or Apache-2.0"
-repository = "https://github.com/thicclatka/nefaxer"
-homepage = "https://github.com/thicclatka/nefaxer"
+repository = "https://github.com/Latka-Industries/nefaxer"
+homepage = "https://ublx.dev/nefaxer/"
 documentation = "https://docs.rs/nefaxer"
 readme = "README.md"
 keywords = ["directory", "index", "diff", "sqlite", "change-detection"]
@@ -40,7 +40,7 @@ ignore = "0.4.25"
 jwalk = "0.8.1"
 kdam = "0.6.4"
 libc = "0.2.185"
-log = "0.4.29"
+log = "0.4.31"
 memmap2 = "0.9.10"
 rayon = "1.12.0"
 rpassword = "7.5.2"
@@ -53,6 +53,14 @@ walkdir = "2.5.0"
 
 [dev-dependencies]
 anyhow = "1.0.100"
+criterion = { version = "0.8.2", features = ["html_reports"] }
+
+[[bench]]
+name = "benchmarks"
+harness = false
+
+[profile.bench]
+debug = false
 
 [profile.release]
 opt-level = "s"
