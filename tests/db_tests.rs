@@ -32,14 +32,8 @@ fn test_in_memory_path_count_and_load_index() {
 
     let map = load_index(&conn).unwrap();
     assert_eq!(map.len(), 3);
-    assert_eq!(
-        map.get(&PathBuf::from("a/b")),
-        Some(&(100, 10_u64, None))
-    );
-    assert_eq!(
-        map.get(&PathBuf::from("c/d")),
-        Some(&(200, 20_u64, None))
-    );
+    assert_eq!(map.get(&PathBuf::from("a/b")), Some(&(100, 10_u64, None)));
+    assert_eq!(map.get(&PathBuf::from("c/d")), Some(&(200, 20_u64, None)));
     assert_eq!(
         map.get(&PathBuf::from("e/f")),
         Some(&(300, 30_u64, Some(vec![0u8; 32])))

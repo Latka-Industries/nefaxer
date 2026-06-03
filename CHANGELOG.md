@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11] - 2026-06-02
+
+### Added
+
+- Criterion benchmark suite (`cargo bench --bench benchmarks`): end-to-end library and CLI indexing on a 3k-file fixture
+
+### Changed
+
+- Slim README; point detailed docs to [ublx.dev/nefaxer](https://ublx.dev/nefaxer/)
+- Add `CHANGELOG.md` (backfilled through 0.1.10)
+- Crate metadata: `repository` and `homepage` URLs updated to Latka-Industries / ublx.dev
+- Dependency bump: `log` 0.4.29 → 0.4.31
+
 ## [0.1.10] - 2026-05-27
 
 ### Changed
@@ -94,6 +107,7 @@ Initial crates.io release.
 - Streaming SQLite writes (WAL, batched inserts)
 - `.nefaxer` on-disk schema and `.nefaxer.toml` CLI config
 
+[0.1.11]: https://github.com/Latka-Industries/nefaxer/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/Latka-Industries/nefaxer/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/Latka-Industries/nefaxer/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/Latka-Industries/nefaxer/compare/v0.1.7...v0.1.8
