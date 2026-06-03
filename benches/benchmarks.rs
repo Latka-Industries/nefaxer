@@ -1,96 +1,82 @@
-//! Criterion benchmarks: hashing, SQLite batch inserts, walkdir vs jwalk.
+//! End-to-end indexing benchmarks (full pipeline, not component microbenches).
 
 mod common;
 
-use common::{
-    flush_entry_batch, pipeline_context, populate_flat_tree, sample_entries, temp_dir, write_file,
-};
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use nefaxer::engine::{hash_file, open_db_in_memory};
-use nefaxer::pipeline::spawn_walk_thread;
-use nefaxer::utils::config::DB_INSERT_BATCH_SIZE;
-use std::fs;
+use common::{opts_for_root, populate_index_tree, remove_index_file, temp_fixture_root};
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use nefaxer::nefax_dir;
+use nefaxer::Entry;
 use std::hint::black_box;
+use std::path::Path;
+use std::process::Command;
 
-fn bench_hashing(c: &mut Criterion) {
-    let root = temp_dir("hash");
-    let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(&root).unwrap();
+const FILE_COUNT: usize = 3_000;
 
-    let small_path = root.join("small.bin");
-    let large_path = root.join("large.bin");
-    write_file(&small_path, 64 * 1024);
-    write_file(&large_path, 128 * 1024 * 1024);
-
-    let mut group = c.benchmark_group("hash_file");
-    group.throughput(Throughput::Bytes(64 * 1024));
-    group.bench_function("small_64KiB_chunked", |b| {
-        b.iter(|| black_box(hash_file(&small_path, 64 * 1024).unwrap()));
-    });
-
-    group.throughput(Throughput::Bytes(128 * 1024 * 1024));
-    group.bench_function("large_128MiB_mmap", |b| {
-        b.iter(|| black_box(hash_file(&large_path, 128 * 1024 * 1024).unwrap()));
-    });
-    group.finish();
-
-    let _ = fs::remove_dir_all(&root);
+fn setup_tree() -> std::path::PathBuf {
+    let root = temp_fixture_root("tree");
+    let _ = std::fs::remove_dir_all(&root);
+    populate_index_tree(&root, FILE_COUNT);
+    root
 }
 
-fn bench_sqlite_inserts(c: &mut Criterion) {
-    const TOTAL_ENTRIES: usize = 10_000;
-    let entries = sample_entries(TOTAL_ENTRIES, 0);
-    let batch_sizes = [DB_INSERT_BATCH_SIZE, 2_000, 5_000];
+fn bench_lib_index(c: &mut Criterion) {
+    let root = setup_tree();
+    let opts = opts_for_root(&root, false);
+    let opts_hash = opts_for_root(&root, true);
+    let (existing, _) =
+        nefax_dir(&root, &opts, None, None::<fn(&Entry)>).expect("seed index for reindex");
 
-    let mut group = c.benchmark_group("sqlite_batch_insert");
-    group.throughput(Throughput::Elements(TOTAL_ENTRIES as u64));
-
-    for batch_size in batch_sizes {
-        group.bench_with_input(
-            BenchmarkId::new("entries", batch_size),
-            &batch_size,
-            |b, &batch_size| {
-                let mut conn = open_db_in_memory().unwrap();
-                b.iter(|| {
-                    conn.execute("DELETE FROM paths", []).unwrap();
-                    for chunk in entries.chunks(batch_size) {
-                        flush_entry_batch(&mut conn, chunk);
-                    }
-                });
-            },
-        );
-    }
-    group.finish();
-}
-
-fn bench_walk(c: &mut Criterion) {
-    const FILE_COUNT: usize = 3_000;
-    let root = temp_dir("walk");
-    let _ = fs::remove_dir_all(&root);
-    populate_flat_tree(&root, FILE_COUNT);
-
-    let mut group = c.benchmark_group("directory_walk");
-    group.sample_size(15);
+    let mut group = c.benchmark_group("nefax_dir");
+    group.sample_size(10);
     group.throughput(Throughput::Elements(FILE_COUNT as u64));
 
-    for (name, parallel) in [("walkdir", false), ("jwalk", true)] {
-        group.bench_function(name, |b| {
-            b.iter(|| {
-                let ctx = pipeline_context(&root);
-                let (path_tx, path_rx) = crossbeam_channel::bounded(50_000);
-                let (path_count_tx, path_count_rx) = crossbeam_channel::bounded(1);
-                let handle = spawn_walk_thread(path_tx, path_count_tx, ctx, parallel);
-                while path_rx.recv().is_ok() {}
-                let count = handle.join().unwrap();
-                let _ = path_count_rx.recv();
-                black_box(count)
-            });
-        });
-    }
-    group.finish();
+    group.bench_function("fresh", |b| {
+        b.iter(|| black_box(nefax_dir(&root, &opts, None, None::<fn(&Entry)>).unwrap()));
+    });
 
-    let _ = fs::remove_dir_all(&root);
+    group.bench_function("fresh_with_hash", |b| {
+        b.iter(|| black_box(nefax_dir(&root, &opts_hash, None, None::<fn(&Entry)>).unwrap()));
+    });
+
+    group.bench_function("reindex_unchanged", |b| {
+        b.iter(|| black_box(nefax_dir(&root, &opts, Some(&existing), None::<fn(&Entry)>).unwrap()));
+    });
+
+    group.finish();
+    let _ = std::fs::remove_dir_all(&root);
 }
 
-criterion_group!(benches, bench_hashing, bench_sqlite_inserts, bench_walk);
+fn bench_cli_index(c: &mut Criterion) {
+    let root = setup_tree();
+    let nefaxer = env!("CARGO_BIN_EXE_nefaxer");
+
+    let mut group = c.benchmark_group("cli_index");
+    group.sample_size(10);
+    group.throughput(Throughput::Elements(FILE_COUNT as u64));
+
+    group.bench_function("fresh", |b| {
+        b.iter(|| run_cli_index(nefaxer, &root, false));
+    });
+
+    group.bench_function("fresh_with_hash", |b| {
+        b.iter(|| run_cli_index(nefaxer, &root, true));
+    });
+
+    group.finish();
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+fn run_cli_index(nefaxer: &str, root: &Path, with_hash: bool) {
+    remove_index_file(root);
+    let mut cmd = Command::new(nefaxer);
+    cmd.arg(root);
+    if with_hash {
+        cmd.arg("-c");
+    }
+    let status = cmd.status().expect("run nefaxer CLI");
+    assert!(status.success(), "nefaxer exited with {status}");
+    black_box(root.join(".nefaxer").exists());
+}
+
+criterion_group!(benches, bench_lib_index, bench_cli_index);
 criterion_main!(benches);
