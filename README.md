@@ -34,14 +34,10 @@ Library: `cargo add nefaxer`. Releases: [Source Code][releases].
 | [Library][nefax-lib]                              | `nefax_dir`, streaming, tuning           |
 | **[API (docs.rs)][docs-rs]**                      | Rust crate reference                     |
 
-[UBLX][ublx] uses Nefaxer for snapshots, the Delta tab, and duplicate detection; enrich with [ZahirScan][zahirscan].
-
 ## License
 
 Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE).
 
-[ublx]: https://github.com/Latka-Industries/UBLX
-[zahirscan]: https://github.com/Latka-Industries/zahirscan
 [nefax-site]: http://ublx.dev/nefaxer
 [nefax-install]: http://ublx.dev/nefaxer/install
 [nefax-cli]: http://ublx.dev/nefaxer/cli
