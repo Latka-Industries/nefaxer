@@ -1,0 +1,81 @@
+name: Bug report
+description: Incorrect indexing, diff results, crashes, or unexpected CLI/library behavior
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Include enough detail to reproduce — especially version, platform, and whether you hit this via the CLI or the library.
+
+  - type: input
+    id: version
+    attributes:
+      label: Nefaxer version
+      description: Output of `nefaxer --version`, `cargo pkgid`, or the crates.io release you installed
+      placeholder: "0.1.11"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: interface
+    attributes:
+      label: How are you using Nefaxer?
+      options:
+        - CLI (`nefaxer …`)
+        - Library (`nefax_dir`, etc.)
+        - Both
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: OS and architecture
+      placeholder: "macOS 15, aarch64 / Ubuntu 24.04, x86_64 / Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Command(s), target directory layout, flags, `.nefaxer.toml`, or minimal Rust snippet
+      placeholder: |
+        1. `nefaxer -c /path/to/tree`
+        2. Change a file
+        3. `nefaxer --dry-run -l /path/to/tree`
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or output
+      description: Paste relevant stdout/stderr. Use `-v` if helpful. Redact paths or secrets.
+      render: shell
+
+  - type: checkboxes
+    id: hashing
+    attributes:
+      label: Context
+      options:
+        - label: I used `--check-hash` / `-c` (Blake3 hashing enabled)
+        - label: The index is encrypted (`--encrypt` / SQLCipher)
+        - label: I can share a minimal repro tree or sample `.nefaxer` if asked

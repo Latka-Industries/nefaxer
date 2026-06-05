@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://ublx.dev/nefaxer/
+    about: CLI flags, configuration, architecture, and library usage
+  - name: API reference (docs.rs)
+    url: https://docs.rs/nefaxer
+    about: Rust crate API documentation
