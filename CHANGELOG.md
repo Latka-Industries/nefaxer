@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12] - 2026-07-20
+
+### Changed
+
+- Dependency bumps (`anyhow`, and transitive updates via `Cargo.lock`)
+- GitHub issue templates for bug reports and feature requests
+
 ## [0.1.11] - 2026-06-02
 
 ### Added
@@ -102,6 +109,7 @@ Initial crates.io release.
 - Streaming SQLite writes (WAL, batched inserts)
 - `.nefaxer` on-disk schema and `.nefaxer.toml` CLI config
 
+[0.1.12]: https://github.com/Latka-Industries/nefaxer/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/Latka-Industries/nefaxer/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/Latka-Industries/nefaxer/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/Latka-Industries/nefaxer/compare/v0.1.8...v0.1.9
